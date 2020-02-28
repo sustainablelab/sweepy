@@ -137,6 +137,9 @@ class MonoSweep(MonochromatorAdapter, Sweep):
         Returns nice response with filter name instead of the raw
         string from the monochromator.
 
+        If set filter is OK, store the new filter value in
+        attribute `filter`.
+
         Handles exception thrown if filter name is unknown.
         """
         try:
@@ -145,6 +148,7 @@ class MonoSweep(MonochromatorAdapter, Sweep):
                 )
             if response == b'  ok\r\n':
                 response = f"Filter set to '{filter_name}'."
+                self.filter = filter_name
             else:
                 print("Unexpected monochromator response:")
                 print(response)
@@ -166,6 +170,7 @@ class MonoSweep(MonochromatorAdapter, Sweep):
 
         If monochromator responds OK:
             return wavelength string, e.g.: "Wavelength: 550nm"
+            set attribute wavelength to `nm`
 
         If monochromator does not respond with OK:
             return monochromator's response as a string with preface
@@ -174,6 +179,7 @@ class MonoSweep(MonochromatorAdapter, Sweep):
         response = self.mon.set_nm(nm)
         if response == b'  ok\r\n':
             response = f"Wavelength: {nm}nm."
+            self.wavelength = nm
         else:
             print("Unexpected monochromator response:")
             print(response)
@@ -192,6 +198,7 @@ class MonoSweep(MonochromatorAdapter, Sweep):
         Check if next_wavelength is stop_nm.
         Change state to 'stop' after stepping to stop_nm.
         """
+        # Figure out which filter to use
         ''' --- FILTER WHEEL --- '''
         if self.next_wavelength < self.wavelength_to_start_using_400nm_LPF:
             expect_filter = 'BLANK'
@@ -202,6 +209,7 @@ class MonoSweep(MonochromatorAdapter, Sweep):
         else:
             expect_filter = '700nm LPF'
             self.filter_changed = self.next_filter != expect_filter
+        # Move the filter if it changed
         if self.filter_changed:
             self.next_filter = expect_filter
             # _cmdoutput(f"Moving filter wheel to {self.next_filter}...")
@@ -211,11 +219,18 @@ class MonoSweep(MonochromatorAdapter, Sweep):
             print(f"Loading filter: {self.next_filter}...")
             response = self.set_filter(self.next_filter)
             # _cmdoutput(response + f' Going to {self.next_wavelength}nm...')
-        ''' ---INCREMENT AND STOP WHEN DONE--- '''
-        if self.next_wavelength >= self.stop_nm:
-            self.stop() # set flag
-        else: self.next_wavelength += self.step_nm
+        # Step to the next wavelength
         ''' ---GRATING--- '''
         self.set_nm(self.next_wavelength)
         status = (f"Filter: {self.next_filter}, Wavelength: {self.next_wavelength}nm")
+        ''' ---INCREMENT AND STOP WHEN DONE--- '''
+        if self.next_wavelength > self.stop_nm:
+            # Clear flag self.in_progress,
+            # restore pre-sweep settings
+            self.stop()
+            # Move filterwheel back to pre-sweep filter
+            print(f"Loading filter: {self.next_filter}...")
+            self.set_filter(self.next_filter)
+            status = self.set_nm(self.next_wavelength)
+        else: self.next_wavelength += self.step_nm
         return status

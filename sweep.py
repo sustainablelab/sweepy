@@ -27,7 +27,7 @@ class Sweep(object):
         stop_nm=850,
         step_nm=10,
         next_wavelength=550,
-        next_filter='BLANK'
+        next_filter='BLANK',
         ):
         '''TODO: change nm to good defaults when testing is done.'''
         # constants
@@ -41,15 +41,22 @@ class Sweep(object):
         self.next_wavelength = next_wavelength
         # wavelength list
         self.set_wavelengths(start_nm,stop_nm,step_nm)
+        # saved values to return to after sweep
+        self.save_filter = self.next_filter
+        self.save_wavelength = self.next_wavelength
+        # current value of wavelength and filter
+        self.wavelength = 0 # placeholder: set_nm not called yet
+        self.filter = 'UNKNOWN' # placeholder: set_filter not called yet
     def start(self):
         """Flag for outside world: sweep in progress.
         Return a status string.
         """
         # Tell the outside world the sweep is happening.
         self.in_progress = True
-        # Makes sure sweep starts from a logical initial state
-        self.filter_changed = False
-        self.next_filter = 'BLANK'
+        # Save state of monochromator before starting sweep
+        self.save_filter = self.next_filter
+        self.save_wavelength = self.next_wavelength
+        # Set next wavelength to starting wavelength
         self.next_wavelength = self.start_nm
         return (
             "Scan: "
@@ -61,6 +68,9 @@ class Sweep(object):
     def stop(self):
         """Flag for outside world: sweep not in progress."""
         self.in_progress = False
+        # Restore state prior to sweep
+        self.next_filter = self.save_filter
+        self.next_wavelength = self.save_wavelength
     def set_wavelengths(self, start_nm, stop_nm, step_nm):
         """Store sweep parameters and create wavelengths list."""
         self.wavelengths=list(
